@@ -1,0 +1,6 @@
+{
+  "name": "BrandLens",
+  "description": "AI-powered brand governance platform to check marketing content against brand guidelines before publishing.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
