@@ -114,6 +114,8 @@ export default function App() {
     brand_id: number;
     title: string;
     content_type: string;
+    source_type?: string;
+    detected_language?: string;
     content: string;
     force_demo: boolean;
   }) => {
@@ -136,6 +138,44 @@ export default function App() {
     await loadHistory();
   };
 
+  const handleReviewIssue = async (
+    issueDbId: number,
+    payload: {
+      decision?: "pending" | "accepted" | "rejected";
+      reviewer_reason?: string;
+      correction_decision?: "pending" | "accepted" | "rejected" | "edited";
+      final_corrected_text?: string;
+    }
+  ) => {
+    const { issues } = await api.reviewIssue(issueDbId, payload);
+    setActiveDetail((prev) => (prev ? { ...prev, issues } : prev));
+  };
+
+  const handleApproveContent = async (
+    contentId: number,
+    payload: {
+      approval_status: ApprovalStatus;
+      corrected_content: string;
+      final_content: string;
+      review_notes?: string;
+    }
+  ) => {
+    const { content } = await api.approveContent(contentId, payload);
+    setActiveDetail((prev) => (prev ? { ...prev, content } : prev));
+    await loadHistory();
+  };
+
+  const handleBrandUpdatedFromSuggestion = (updatedBrand: Brand) => {
+    setBrands((prev) =>
+      prev.map((b) => (b.id === updatedBrand.id ? updatedBrand : b))
+    );
+    setActiveDetail((prev) =>
+      prev && prev.brand.id === updatedBrand.id
+        ? { ...prev, brand: updatedBrand }
+        : prev
+    );
+  };
+
   const handleSubmitReview = async (
     id: number,
     payload: {
@@ -145,9 +185,16 @@ export default function App() {
       review_notes: string;
     }
   ) => {
-    const { content } = await api.saveReview(id, payload);
+    const { content } = await api.approveContent(id, payload);
     setActiveDetail((prev) => (prev ? { ...prev, content } : prev));
     await loadHistory();
+  };
+
+  const handleResetHistory = async () => {
+    const res = await api.resetHistory();
+    setHistoryItems([]);
+    setStats(res.stats ?? EMPTY_STATS);
+    setActiveDetail(null);
   };
 
   const selectedBrand = brands.find((b) => b.id === selectedBrandId) ?? brands[0];
@@ -160,6 +207,8 @@ export default function App() {
       selectedBrandId={selectedBrandId}
       onSelectBrand={setSelectedBrandId}
       health={health}
+      historyCount={historyItems.length}
+      onResetHistory={handleResetHistory}
     >
       {globalError && (
         <div
@@ -215,6 +264,9 @@ export default function App() {
           loading={loadingDetail}
           onSelectAnalysis={(id) => handleOpenAnalysis(id, "results")}
           onSaveDraftCorrection={handleSaveDraftCorrection}
+          onReviewIssue={handleReviewIssue}
+          onApproveContent={handleApproveContent}
+          onBrandUpdated={handleBrandUpdatedFromSuggestion}
           onNavigate={setActivePage}
         />
       )}
@@ -235,6 +287,7 @@ export default function App() {
           items={historyItems}
           loading={loadingInitial}
           onOpenAnalysis={handleOpenAnalysis}
+          onResetHistory={handleResetHistory}
           onNavigate={setActivePage}
         />
       )}

@@ -5,9 +5,11 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from database import init_database
 from routes.brands import router as brands_router
+from routes.ingestion import router as ingestion_router
 from routes.analysis import router as analysis_router
 from routes.history import router as history_router
 from routes.review import router as review_router
+from routes.guidelines import router as guidelines_router
 from services.gemini_service import is_gemini_configured
 
 load_dotenv()
@@ -36,6 +38,8 @@ def health_check():
 
 
 app.include_router(brands_router)
+app.include_router(ingestion_router)
 app.include_router(analysis_router)
 app.include_router(history_router)
 app.include_router(review_router)
+app.include_router(guidelines_router)

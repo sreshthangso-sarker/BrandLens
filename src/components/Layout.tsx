@@ -9,6 +9,7 @@ import {
   Menu,
   ScanSearch,
   ShieldCheck,
+  Trash2,
   X,
 } from "lucide-react";
 import type { Brand, HealthResponse, PageView } from "../types.ts";
@@ -20,6 +21,8 @@ interface LayoutProps {
   selectedBrandId: number | null;
   onSelectBrand: (id: number) => void;
   health: HealthResponse | null;
+  historyCount: number;
+  onResetHistory: () => Promise<void>;
   children: ReactNode;
 }
 
@@ -52,11 +55,25 @@ export function Layout({
   selectedBrandId,
   onSelectBrand,
   health,
+  historyCount,
+  onResetHistory,
   children,
 }: LayoutProps) {
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [confirmingSidebarReset, setConfirmingSidebarReset] = useState(false);
+  const [resettingSidebar, setResettingSidebar] = useState(false);
 
   const selectedBrand = brands.find((b) => b.id === selectedBrandId) ?? brands[0];
+
+  const handleSidebarReset = async () => {
+    setResettingSidebar(true);
+    try {
+      await onResetHistory();
+      setConfirmingSidebarReset(false);
+    } finally {
+      setResettingSidebar(false);
+    }
+  };
 
   const handleNavClick = (page: PageView) => {
     onNavigate(page);
@@ -167,12 +184,50 @@ export function Layout({
             </div>
           )}
 
-          <div className="pt-1 text-[11px] text-slate-300 leading-relaxed">
-            {health?.ai_mode === "gemini" ? (
-              <span>Engine: Google Gemini ({health.model})</span>
+          <div className="pt-1 space-y-2">
+            {confirmingSidebarReset ? (
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  disabled={resettingSidebar}
+                  onClick={handleSidebarReset}
+                  className="flex-1 px-2.5 py-2 rounded-lg bg-rose-600 hover:bg-rose-700 disabled:opacity-60 text-white text-xs font-semibold whitespace-nowrap"
+                >
+                  {resettingSidebar ? "Clearing..." : "Confirm Reset"}
+                </button>
+                <button
+                  type="button"
+                  disabled={resettingSidebar}
+                  onClick={() => setConfirmingSidebarReset(false)}
+                  className="px-2.5 py-2 rounded-lg border border-white/15 bg-white/6 hover:bg-white/12 text-xs text-slate-200 whitespace-nowrap"
+                >
+                  Cancel
+                </button>
+              </div>
             ) : (
-              <span>Engine: Demo Mode (Rule-Based Sample)</span>
+              <button
+                type="button"
+                disabled={historyCount === 0}
+                onClick={() => setConfirmingSidebarReset(true)}
+                title={
+                  historyCount === 0
+                    ? "Analysis history is already empty"
+                    : "Clear all saved analysis history"
+                }
+                className="w-full px-3 py-2 rounded-lg border border-white/15 bg-white/6 hover:bg-rose-500/20 hover:border-rose-400/40 disabled:opacity-45 disabled:hover:bg-white/6 disabled:hover:border-white/15 disabled:cursor-not-allowed text-xs font-medium text-slate-200 hover:text-white inline-flex items-center justify-center gap-1.5 whitespace-nowrap transition-colors"
+              >
+                <Trash2 className="w-3.5 h-3.5 shrink-0" />
+                Reset Analysis History
+              </button>
             )}
+
+            <div className="text-[11px] text-slate-300 leading-relaxed">
+              {health?.ai_mode === "gemini" ? (
+                <span>Engine: Google Gemini ({health.model})</span>
+              ) : (
+                <span>Engine: Demo Mode (Rule-Based Sample)</span>
+              )}
+            </div>
           </div>
         </div>
       </aside>

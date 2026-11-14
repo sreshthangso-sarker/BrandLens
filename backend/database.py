@@ -15,8 +15,14 @@ def get_connection() -> sqlite3.Connection:
     return conn
 
 
+def _ensure_column(conn: sqlite3.Connection, table_name: str, column_name: str, column_def: str) -> None:
+    cols = [row["name"] for row in conn.execute(f"PRAGMA table_info({table_name})").fetchall()]
+    if column_name not in cols:
+        conn.execute(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_def};")
+
+
 def init_database() -> None:
-    """Create Brands, Content, and AnalysisResults tables and seed NovaWear."""
+    """Create Brands, Content, and AnalysisResults tables, migrate Module 2 columns, and seed NovaWear."""
     conn = get_connection()
     try:
         conn.executescript(
@@ -38,6 +44,8 @@ def init_database() -> None:
                 brand_id INTEGER NOT NULL,
                 title TEXT NOT NULL,
                 content_type TEXT NOT NULL,
+                source_type TEXT NOT NULL DEFAULT 'text',
+                detected_language TEXT NOT NULL DEFAULT 'English',
                 original_content TEXT NOT NULL,
                 corrected_content TEXT NOT NULL DEFAULT '',
                 final_content TEXT NOT NULL DEFAULT '',
@@ -52,6 +60,7 @@ def init_database() -> None:
             CREATE TABLE IF NOT EXISTS AnalysisResults (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 content_id INTEGER NOT NULL,
+                issue_id TEXT NOT NULL DEFAULT '',
                 issue_type TEXT NOT NULL,
                 severity TEXT NOT NULL,
                 original_text TEXT NOT NULL,
@@ -59,10 +68,45 @@ def init_database() -> None:
                 explanation TEXT NOT NULL,
                 suggested_correction TEXT NOT NULL,
                 rule_reference TEXT NOT NULL DEFAULT '',
+                confidence REAL NOT NULL DEFAULT 0.85,
+                classification TEXT NOT NULL DEFAULT 'confirmed_violation',
                 FOREIGN KEY (content_id) REFERENCES Content(id) ON DELETE CASCADE
+            );
+
+            CREATE TABLE IF NOT EXISTS IssueReviews (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                issue_id INTEGER NOT NULL UNIQUE,
+                content_id INTEGER NOT NULL,
+                decision TEXT NOT NULL DEFAULT 'pending',
+                reviewer_reason TEXT NOT NULL DEFAULT '',
+                correction_decision TEXT NOT NULL DEFAULT 'pending',
+                final_corrected_text TEXT NOT NULL DEFAULT '',
+                reviewed_at TEXT NOT NULL DEFAULT (datetime('now')),
+                FOREIGN KEY (issue_id) REFERENCES AnalysisResults(id) ON DELETE CASCADE,
+                FOREIGN KEY (content_id) REFERENCES Content(id) ON DELETE CASCADE
+            );
+
+            CREATE TABLE IF NOT EXISTS GuidelineSuggestions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                brand_id INTEGER NOT NULL,
+                target_field TEXT NOT NULL DEFAULT 'guidelines',
+                existing_guideline TEXT NOT NULL DEFAULT '',
+                proposed_guideline TEXT NOT NULL,
+                reason TEXT NOT NULL,
+                related_decisions TEXT NOT NULL DEFAULT '[]',
+                status TEXT NOT NULL DEFAULT 'pending',
+                created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                approved_at TEXT,
+                FOREIGN KEY (brand_id) REFERENCES Brands(id) ON DELETE CASCADE
             );
             """
         )
+
+        _ensure_column(conn, "Content", "source_type", "TEXT NOT NULL DEFAULT 'text'")
+        _ensure_column(conn, "Content", "detected_language", "TEXT NOT NULL DEFAULT 'English'")
+        _ensure_column(conn, "AnalysisResults", "issue_id", "TEXT NOT NULL DEFAULT ''")
+        _ensure_column(conn, "AnalysisResults", "confidence", "REAL NOT NULL DEFAULT 0.85")
+        _ensure_column(conn, "AnalysisResults", "classification", "TEXT NOT NULL DEFAULT 'confirmed_violation'")
 
         row = conn.execute("SELECT COUNT(*) AS count FROM Brands").fetchone()
         if row and row["count"] == 0:

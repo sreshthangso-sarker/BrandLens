@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Search } from "lucide-react";
+import { RotateCcw, Search, Trash2 } from "lucide-react";
 import type { AnalysisStatus, HistoryItem, PageView } from "../types.ts";
 import {
   AnalysisStatusLabel,
@@ -10,6 +10,7 @@ interface HistoryPageProps {
   items: HistoryItem[];
   loading: boolean;
   onOpenAnalysis: (id: number, targetPage: PageView) => void;
+  onResetHistory: () => Promise<void>;
   onNavigate: (page: PageView) => void;
 }
 
@@ -19,10 +20,17 @@ export function HistoryPage({
   items,
   loading,
   onOpenAnalysis,
+  onResetHistory,
   onNavigate,
 }: HistoryPageProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("All");
+  const [confirmingReset, setConfirmingReset] = useState(false);
+  const [resetting, setResetting] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const hasActiveFilters = searchQuery.trim().length > 0 || statusFilter !== "All";
 
   const filteredItems = useMemo(() => {
     return items.filter((item) => {
@@ -38,41 +46,126 @@ export function HistoryPage({
     });
   }, [items, searchQuery, statusFilter]);
 
+  const handleResetFilters = () => {
+    setSearchQuery("");
+    setStatusFilter("All");
+  };
+
+  const handleConfirmResetHistory = async () => {
+    setResetting(true);
+    setError(null);
+    setNotice(null);
+    try {
+      await onResetHistory();
+      setSearchQuery("");
+      setStatusFilter("All");
+      setConfirmingReset(false);
+      setNotice("Analysis history cleared. Brand guidelines remain intact.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to reset analysis history.");
+    } finally {
+      setResetting(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
-      {/* Search and Filter Controls */}
-      <section className="bg-white border border-[#E5E7F0] rounded-xl p-5 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-        <div className="relative flex-1 max-w-md">
-          <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-          <input
-            type="search"
-            aria-label="Search analysis history"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search by title, brand, or content type..."
-            className="w-full pl-9 pr-3.5 py-2 rounded-lg border border-[#D5D9E6] text-sm text-[#141A2E] focus:outline-none focus:border-[#4DA6FF]"
-          />
+      {/* Search, Filter, and Reset Controls */}
+      <section className="bg-white border border-[#E5E7F0] rounded-xl p-5 flex flex-col xl:flex-row xl:items-center xl:justify-between gap-4">
+        <div className="flex flex-wrap items-center gap-3 flex-1">
+          <div className="relative flex-1 min-w-[220px] max-w-md">
+            <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+            <input
+              type="search"
+              aria-label="Search analysis history"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search by title, brand, or content type..."
+              className="w-full pl-9 pr-3.5 py-2 rounded-lg border border-[#D5D9E6] text-sm text-[#141A2E] focus:outline-none focus:border-[#4DA6FF]"
+            />
+          </div>
+
+          {hasActiveFilters && (
+            <button
+              type="button"
+              onClick={handleResetFilters}
+              className="px-3 py-2 rounded-lg border border-[#D5D9E6] bg-white hover:bg-slate-50 text-xs font-medium text-slate-700 inline-flex items-center gap-1.5 whitespace-nowrap shrink-0"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              Reset Filters
+            </button>
+          )}
         </div>
 
-        <div className="flex flex-wrap items-center gap-1 p-1 bg-[#F7F8FC] border border-[#E5E7F0] rounded-lg">
-          {(["All", "Compliant", "Needs Review", "Non-Compliant"] as StatusFilter[]).map(
-            (tab) => (
+        <div className="flex flex-wrap items-center justify-between xl:justify-end gap-3">
+          <div className="flex flex-wrap items-center gap-1 p-1 bg-[#F7F8FC] border border-[#E5E7F0] rounded-lg">
+            {(["All", "Compliant", "Needs Review", "Non-Compliant"] as StatusFilter[]).map(
+              (tab) => (
+                <button
+                  key={tab}
+                  type="button"
+                  onClick={() => setStatusFilter(tab)}
+                  className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors whitespace-nowrap ${
+                    statusFilter === tab
+                      ? "bg-white text-[#141A2E] shadow-xs"
+                      : "text-slate-600 hover:text-[#141A2E]"
+                  }`}
+                >
+                  {tab}
+                </button>
+              )
+            )}
+          </div>
+
+          {confirmingReset ? (
+            <div className="flex items-center gap-2 shrink-0">
               <button
-                key={tab}
                 type="button"
-                onClick={() => setStatusFilter(tab)}
-                className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors whitespace-nowrap ${
-                  statusFilter === tab
-                    ? "bg-white text-[#141A2E] shadow-xs"
-                    : "text-slate-600 hover:text-[#141A2E]"
-                }`}
+                disabled={resetting}
+                onClick={handleConfirmResetHistory}
+                className="px-3 py-2 rounded-lg bg-rose-600 hover:bg-rose-700 disabled:opacity-60 text-white text-xs font-semibold whitespace-nowrap shrink-0"
               >
-                {tab}
+                {resetting ? "Clearing..." : "Confirm Clear All"}
               </button>
-            )
+              <button
+                type="button"
+                disabled={resetting}
+                onClick={() => setConfirmingReset(false)}
+                className="px-3 py-2 rounded-lg border border-[#D5D9E6] bg-white hover:bg-slate-50 text-xs font-medium text-slate-700 whitespace-nowrap shrink-0"
+              >
+                Cancel
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              disabled={items.length === 0}
+              onClick={() => setConfirmingReset(true)}
+              title={
+                items.length === 0
+                  ? "Analysis history is already empty"
+                  : "Clear all saved analysis history"
+              }
+              className="px-3 py-2 rounded-lg border border-rose-200 bg-rose-50 hover:bg-rose-100 disabled:border-[#E5E7F0] disabled:bg-slate-50 disabled:text-slate-400 disabled:cursor-not-allowed text-rose-700 text-xs font-medium inline-flex items-center gap-1.5 whitespace-nowrap shrink-0 transition-colors"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              Reset Analysis History
+            </button>
           )}
         </div>
       </section>
+
+      {error && (
+        <div role="alert" className="bg-rose-50 border border-rose-200 text-rose-800 rounded-xl px-4 py-3 text-sm">
+          {error}
+        </div>
+      )}
+
+      {notice && (
+        <div role="status" className="bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl px-4 py-3 text-sm">
+          {notice}
+        </div>
+      )}
 
       {/* History Table */}
       <section className="bg-white border border-[#E5E7F0] rounded-xl overflow-hidden">
